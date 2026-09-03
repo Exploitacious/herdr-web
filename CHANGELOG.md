@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- `--allow-host HOSTNAME` now accepts that hostname on any Host-header port (or with no port), so a bridge behind a reverse proxy such as `tailscale serve --https=443` no longer answers 403 on `/api` calls. Cherry-picked from trillium/herdr-web (21157e6).
+
 ### Removed
 
 ## [0.5.1] - 2026-09-04
