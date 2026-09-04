@@ -1518,7 +1518,7 @@ fn host_authority_allowed(authority: &str, policy: &RequestPolicy) -> bool {
     }
 
     // An explicit --allow-host entry is the operator's opt-in for this exact hostname, so it wins
-    // regardless of the Host header's port. Reverse proxies (e.g. `tailscale serve --https=8443`)
+    // regardless of the Host header's port. Reverse proxies (e.g. `tailscale serve --https=443`)
     // forward a Host authority whose port differs from --port, or omit the port entirely.
     if policy
         .allowed_hosts

@@ -396,9 +396,11 @@ must also be same-origin with the bridge, an explicitly allowed origin such as A
 be explicitly allowed with `--allow-host HOSTNAME`.
 
 When a trusted reverse proxy publishes the bridge from a different scheme or port, pass its exact
-external origin with `--public-origin ORIGIN`. This allows that Origin and Host authority while
-keeping ordinary `--allow-host` names restricted to the bridge's listening port. These flags are
-DNS-rebinding/CSRF guards, not user authentication.
+external origin with `--public-origin ORIGIN`. This allows that exact Origin and Host authority.
+An `--allow-host` name is accepted on any Host-header port (or with no port), since a proxy may
+forward a different port than the bridge listens on; hosts that are not allow-listed still have to
+match the bridge's listening port. These flags are DNS-rebinding/CSRF guards, not user
+authentication.
 
 Bridge-owned notes are part of that same request policy. Any allowed bridge client can read and
 mutate saved note content, including clients connecting over a trusted LAN when the bridge is bound
