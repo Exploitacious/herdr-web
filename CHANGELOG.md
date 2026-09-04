@@ -18,10 +18,14 @@
   file is absent (404) or unusable. Refreshes on mount, every 60 seconds, on window focus, and on
   visibilitychange when the page becomes visible; a failed refresh keeps the last good data with a
   stale marker.
+- Added `--public-origin ORIGIN` for trusted reverse proxies that publish the bridge from a different
+  scheme or port.
 
 ### Changed
 
 ### Fixed
+
+- `--allow-host HOSTNAME` now accepts that hostname on any Host-header port (or with no port), so a bridge behind a reverse proxy such as `tailscale serve --https=443` no longer answers 403 on `/api` calls. Cherry-picked from trillium/herdr-web (21157e6).
 
 ### Removed
 
