@@ -6,6 +6,12 @@
 
 ### Added
 
+- Bridges advertised by the hosting server in a same-origin `/bridges.json` are now discovered
+  automatically and shown alongside saved bridges, so devices pick up sessions as they start and
+  stop without editing Settings by hand. Discovered bridges can be enabled or disabled but not
+  edited or deleted, are never written to local storage, and show the Claude profile (work or
+  personal) they run under. The file is optional; deployments without it are unaffected.
+
 ### Changed
 
 ### Fixed
