@@ -58,3 +58,41 @@ The app expects these bridge routes:
 Launcher execution belongs to the bridge. The frontend selects a preset and placement; it does not
 construct Herdr `agent.start` requests. Built-in agents use Herdr's managed-agent flow after the
 bridge creates the destination pane, while custom presets retain their exact configured `argv`.
+
+## Discovered bridges
+
+When the server that delivers this app also publishes a `bridges.json` at the page origin, the app
+reads it (with `cache: no-store`) and merges the listed bridges into the saved-bridge list. This
+lets a hub advertise the live bridges it fronts so phones and laptops pick up sessions as they come
+and go without editing Settings. The file is optional: a `404`, a network error, or a malformed
+body is silent, and deployments without it behave exactly as before.
+
+Discovered bridges appear in Settings → Bridge with a working enable switch but no edit or delete
+controls, and are never written to local storage. A user-saved bridge with the same URL always wins
+over a discovered one. The shape is:
+
+```json
+{
+  "version": 1,
+  "generatedAt": "2026-09-04T16:26:36Z",
+  "host": "workspace.example.ts.net",
+  "hub": { "baseUrl": "https://workspace.example.ts.net:8787", "label": "console" },
+  "bridges": [
+    {
+      "id": "session:bootloop",
+      "name": "bootloop",
+      "baseUrl": "https://workspace.example.ts.net:8801",
+      "profile": "work",
+      "workdir": "~/COWORK",
+      "color": "#89b4fa"
+    }
+  ]
+}
+```
+
+`id`, `name`, and `baseUrl` are required per entry. `profile` (one of `work`, `personal`, `other`)
+and `color` (a `#rrggbb` hex) are optional; `profile` renders a small tag next to the bridge name —
+a compact `W`/`P` on the narrow host chips (with the full word as its accessible name) and the full
+`work`/`personal` word in space-group headers and the Settings summary. The `hub` entry is not added
+as a bridge, and any entry whose URL is the page's own origin is dropped, since it is already
+reachable as the same-origin bridge.

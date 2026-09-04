@@ -179,6 +179,10 @@ export function BackendSettingsDialog({
     [bridge.store.backends, form.id],
   );
   const sameOriginEnabled = bridge.store.enabledBridgeIds.includes(SAME_ORIGIN_BRIDGE_ID);
+  // Discovered bridges come from the hub's /bridges.json. They can be enabled
+  // or disabled but not edited or deleted here, so the form shows a read-only
+  // summary instead of the editable fields and save/delete actions.
+  const discoveredSelected = selectedBackend?.discovered === true;
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -327,7 +331,7 @@ export function BackendSettingsDialog({
         }}
         onSubmit={(event) => {
           event.preventDefault();
-          if (activeArea !== "bridge" || !editingBackend) {
+          if (activeArea !== "bridge" || !editingBackend || discoveredSelected) {
             return;
           }
           void saveBackend();
@@ -417,6 +421,15 @@ export function BackendSettingsDialog({
                           delivered this web app.
                         </span>
                       </div>
+                    ) : selectedBackend?.discovered ? (
+                      <div className="backend-static">
+                        <strong>{selectedBackend.name}</strong>
+                        <span>Discovered from bridges.json</span>
+                        <span className="mono">{selectedBackend.baseUrl}</span>
+                        {selectedBackend.profile ? (
+                          <span>Profile: {selectedBackend.profile}</span>
+                        ) : null}
+                      </div>
                     ) : (
                       <>
                         <label className="field-label">
@@ -479,7 +492,7 @@ export function BackendSettingsDialog({
                     {message ? <div className="modal-message">{message}</div> : null}
                   </div>
                 </div>
-                {editingBackend ? (
+                {editingBackend && !discoveredSelected ? (
                   <div className="modal-actions">
                     {canDelete ? (
                       <button type="button" className="btn btn-danger" disabled={busy} onClick={deleteBackend}>

@@ -11,9 +11,19 @@ import type { ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { fetchWithTimeout } from "./fetchWithTimeout";
+import {
+  DISCOVERED_ID_PREFIX,
+  fetchDiscoveredBridges,
+  mergeDiscoveredBridges,
+} from "./discoveredBridges";
 import { addNativeResumeHandler } from "./native";
 
 export const SAME_ORIGIN_BRIDGE_ID = "same-origin";
+
+// How often the hub's /bridges.json is re-polled while the page is open, on
+// top of the focus/visibility refresh, so new and retired sessions surface
+// without a manual reload. See discoveredBridges.ts for the contract.
+const DISCOVERY_REFRESH_MS = 30_000;
 
 export type BridgeId = string;
 
@@ -23,6 +33,11 @@ export type BridgeBackendProfile = {
   baseUrl: string;
   color?: string;
   lastConnectedAt?: string;
+  // Set only on backends synthesized from the hub's /bridges.json. Both are
+  // runtime-only: writeBackendStore strips them before persisting so a
+  // retired session never lingers in localStorage. See discoveredBridges.ts.
+  discovered?: true;
+  profile?: "work" | "personal" | "other";
 };
 
 export type BridgeBackendStore = {
@@ -130,6 +145,10 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   const [probeRetryTokens, setProbeRetryTokens] = useState<Record<string, number>>({});
   const [resumeToken, setResumeToken] = useState(0);
   const storeEditedRef = useRef(false);
+  // Guards against overlapping /bridges.json reads: focus and visibilitychange
+  // fire together when a phone returns to the foreground, and an interval tick
+  // can land mid-flight. One read at a time is enough.
+  const discoveryInFlightRef = useRef(false);
 
   const sameOriginAvailable = defaultBridgeMode() === "same-origin";
 
@@ -157,6 +176,53 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
       void writeBackendStore(store);
     }
   }, [store, storeLoaded]);
+
+  // Fold the hub's /bridges.json into the store once it has loaded, then keep
+  // it fresh on a timer and when the page regains focus. Gated on
+  // sameOriginAvailable because only a hub-served page has a same-origin file
+  // to read; the native app has no hub and would only 404. Each refresh merges
+  // against the CURRENT store inside the functional update, so a fetch that
+  // resolves after the user edited their bridges never clobbers that edit.
+  useEffect(() => {
+    if (!storeLoaded || !sameOriginAvailable) {
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      if (discoveryInFlightRef.current) {
+        return;
+      }
+      discoveryInFlightRef.current = true;
+      void fetchDiscoveredBridges()
+        .then((discovered) => {
+          if (cancelled) {
+            return;
+          }
+          setStore((current) => mergeDiscoveredBridges(current, discovered));
+        })
+        .finally(() => {
+          // Always clear, even on cleanup, so a re-run of this effect is never
+          // wedged by a read that was in flight when it tore down.
+          discoveryInFlightRef.current = false;
+        });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, DISCOVERY_REFRESH_MS);
+    const onFocus = () => refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [sameOriginAvailable, storeLoaded]);
 
   const availableRuntimes = useMemo(
     () =>
@@ -695,7 +761,7 @@ async function removeLegacyBackendStore() {
 }
 
 export async function writeBackendStore(store: BridgeBackendStore) {
-  const value = JSON.stringify(store);
+  const value = JSON.stringify(stripDiscoveredForStorage(store));
   if (isNativeApp()) {
     try {
       await Preferences.set({ key: STORE_KEY, value });
@@ -708,6 +774,28 @@ export async function writeBackendStore(store: BridgeBackendStore) {
   } catch {
     // Storage can be unavailable in private or locked-down browser contexts.
   }
+}
+
+// Discovered bridges live only for the current page session; persisting them
+// would resurrect sessions the hub has already dropped. Strip the flagged
+// entries and their ids so localStorage holds user-saved backends only.
+function stripDiscoveredForStorage(store: BridgeBackendStore): BridgeBackendStore {
+  const hasDiscovered =
+    store.backends.some((backend) => backend.discovered) ||
+    store.enabledBridgeIds.some((bridgeId) => bridgeId.startsWith(DISCOVERED_ID_PREFIX)) ||
+    (store.lastSelectedBridgeId?.startsWith(DISCOVERED_ID_PREFIX) ?? false);
+  if (!hasDiscovered) {
+    return store;
+  }
+  const backends = store.backends.filter((backend) => !backend.discovered);
+  const enabledBridgeIds = store.enabledBridgeIds.filter(
+    (bridgeId) => !bridgeId.startsWith(DISCOVERED_ID_PREFIX),
+  );
+  const lastSelectedBridgeId =
+    store.lastSelectedBridgeId && !store.lastSelectedBridgeId.startsWith(DISCOVERED_ID_PREFIX)
+      ? store.lastSelectedBridgeId
+      : (enabledBridgeIds[0] ?? null);
+  return { version: store.version, enabledBridgeIds, lastSelectedBridgeId, backends };
 }
 
 export function parseBackendStore(value: unknown): BridgeBackendStore {
@@ -776,6 +864,9 @@ function parseBackendProfile(value: unknown): BridgeBackendProfile | null {
   }
   try {
     const baseUrl = normalizeBridgeBaseUrl(value.baseUrl);
+    // Only the known user-backend fields are copied. A persisted `discovered`
+    // flag or `profile` (which should never reach storage) is deliberately
+    // dropped, so a resurrected entry loads as an ordinary user backend.
     return {
       id: value.id,
       name: value.name.trim() || displayNameFromUrl(baseUrl),
@@ -798,7 +889,7 @@ function fallbackStore(): BridgeBackendStore {
   };
 }
 
-function normalizeEnabledBridgeIds(
+export function normalizeEnabledBridgeIds(
   ids: unknown[],
   backends: readonly BridgeBackendProfile[],
   sameOriginAvailable: boolean,
@@ -840,7 +931,7 @@ function markBackendConnected(
   );
 }
 
-function defaultBridgeMode(): "same-origin" | "disconnected" {
+export function defaultBridgeMode(): "same-origin" | "disconnected" {
   return isNativeApp() ? "disconnected" : "same-origin";
 }
 
@@ -1163,8 +1254,14 @@ export function duplicateBackend(
   ignoreId?: string,
 ) {
   const normalized = normalizeBridgeBaseUrl(baseUrl);
+  // Discovered entries are skipped: a user may save their own bridge for a URL
+  // the hub also advertises, and that user backend then wins the merge. Only a
+  // clash with another user-saved backend counts as a duplicate.
   return (
-    backends.find((backend) => backend.id !== ignoreId && backend.baseUrl === normalized) ?? null
+    backends.find(
+      (backend) =>
+        backend.id !== ignoreId && !backend.discovered && backend.baseUrl === normalized,
+    ) ?? null
   );
 }
 

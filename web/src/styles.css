@@ -421,6 +421,38 @@ button {
   white-space: nowrap;
 }
 
+/* Profile marker (work/personal) shown after a discovered bridge's name in
+   the host chips and multi-host space group headers. Kept narrow and
+   non-shrinking so the name ellipsizes first at ~400px width. */
+.bridge-profile-tag {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: calc(var(--r-sm) - 3px);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 15px;
+  letter-spacing: 0.02em;
+  color: var(--subtext0);
+  background: var(--surface0);
+}
+
+.bridge-profile-tag[data-profile="work"] {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 16%, transparent);
+}
+
+.bridge-profile-tag[data-profile="personal"] {
+  color: var(--mauve);
+  background: color-mix(in srgb, var(--mauve) 16%, transparent);
+}
+
+/* Single-letter W/P variant for the host chips, so the session name keeps its
+   room in the 320-400px sidebar. The full word stays elsewhere. */
+.bridge-profile-tag-compact {
+  padding: 0 4px;
+  letter-spacing: 0;
+}
+
 .grp-bridge-dot {
   width: 9px;
   height: 9px;

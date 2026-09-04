@@ -66,7 +66,8 @@ import { applyActivityMessage, parseActivityEventData, replayActivityMessages } 
 import type { ActivityLogEntry } from "./activity";
 import { BackendSettingsDialog } from "./BackendSettingsDialog";
 import { useBridge } from "./bridge";
-import type { BridgeId, BridgeRuntime } from "./bridge";
+import type { BridgeBackendProfile, BridgeId, BridgeRuntime } from "./bridge";
+import { BridgeProfileTag } from "./BridgeProfileTag";
 import { createCommands, createdPaneId } from "./commands";
 import type { LaunchSpec, PaneFocusDirection, SplitDirection } from "./commands";
 import { isConnectionResultCurrent } from "./connectionState";
@@ -7201,6 +7202,7 @@ function Switcher({
           >
             <span className="bridge-chip-dot" aria-hidden="true" />
             <span className="bridge-chip-label">{view.runtime.label}</span>
+            <BridgeProfileTag profile={view.runtime.backend?.profile} compact />
           </button>
         ))}
         {bridgeViews.length > 1 ? (
@@ -7361,6 +7363,7 @@ function Switcher({
                       <GroupHeader
                         label={view.runtime.label}
                         bridgeColor={view.runtime.color}
+                        profile={view.runtime.backend?.profile}
                         status={aggregateStatus(entries.flatMap((entry) => entry.workspacePanes))}
                         count={entries.length}
                         collapsed={collapsed}
@@ -8690,6 +8693,7 @@ export function NoteEditor({
 function GroupHeader({
   label,
   bridgeColor,
+  profile,
   status,
   count,
   collapsed,
@@ -8698,6 +8702,7 @@ function GroupHeader({
 }: {
   label: string;
   bridgeColor?: string;
+  profile?: BridgeBackendProfile["profile"];
   status?: AgentStatus;
   count: number;
   collapsed: boolean;
@@ -8731,6 +8736,7 @@ function GroupHeader({
       ) : null}
       {bridgeColor && status ? <span className="dot" data-status={status} /> : null}
       <span className="grp-space-name">{label}</span>
+      <BridgeProfileTag profile={profile} />
       <span className="grp-space-count mono">{count}</span>
       <span className="grp-space-line" />
     </button>
