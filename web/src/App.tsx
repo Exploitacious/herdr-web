@@ -88,6 +88,7 @@ import type { LaunchTarget } from "./launch";
 import { fetchLauncherPresets, supportsLauncherPresets } from "./launcherPresets";
 import type { LauncherPresetsResponse } from "./launcherPresets";
 import { fetchWithTimeout } from "./fetchWithTimeout";
+import { FleetUsagePanel, useFleetUsage } from "./FleetUsagePanel";
 import {
   DEFAULT_MOBILE_COMMAND_ENTER_NEWLINE,
   DEFAULT_MOBILE_COMMAND_EXPANDING_INPUT,
@@ -206,7 +207,7 @@ const NoteMarkdownPreview = lazy(() => import("./NoteMarkdownPreview"));
 type LoadState = "loading" | "ready" | "error";
 type Scope = "space" | "all";
 type HostScope = "selected" | "all";
-type SidebarView = "agents" | "tabs" | "notes";
+type SidebarView = "agents" | "tabs" | "notes" | "fleet";
 type AgentSort = "attention" | "status" | "workspace" | "lastStatusChange";
 type AgentGroup = "none" | "host" | "workspace" | "hostWorkspace";
 type SpaceGroup = "none" | "host";
@@ -6115,6 +6116,10 @@ function Switcher({
     pinLabel?: "agent" | "pane",
   ) => void;
 }) {
+  // Fleet usage is fetched here so its availability gates the Fleet tab; it stays
+  // null (tab hidden) until the hub's /usage.json returns a usable payload.
+  const { usage: fleetUsage, stale: fleetStale, refresh: refreshFleet } = useFleetUsage();
+  const fleetAvailable = fleetUsage != null;
   const [optionsMenu, setOptionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [spaceOptionsMenu, setSpaceOptionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [spaceDragTarget, setSpaceDragTarget] = useState<string | null | undefined>(undefined);
@@ -7243,6 +7248,16 @@ function Switcher({
             Notes
           </button>
         ) : null}
+        {fleetAvailable ? (
+          <button
+            type="button"
+            data-on={sidebarView === "fleet"}
+            aria-pressed={sidebarView === "fleet"}
+            onClick={() => onSidebarView("fleet")}
+          >
+            Fleet
+          </button>
+        ) : null}
       </div>
       <div className="sidebar-scope" role="group" aria-label="Sidebar scope">
         <button
@@ -7264,7 +7279,9 @@ function Switcher({
       </div>
 
       <div className="list" ref={spaceListRef}>
-        {!hasListSnapshot ? (
+        {sidebarView === "fleet" && fleetAvailable ? (
+          <FleetUsagePanel usage={fleetUsage} stale={fleetStale} onRefresh={refreshFleet} />
+        ) : !hasListSnapshot ? (
           <div className="empty">
             <strong>
               {bridgeViews.length === 0

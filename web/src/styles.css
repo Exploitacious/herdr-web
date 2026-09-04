@@ -333,7 +333,10 @@ button {
 
 .sidebar-mode {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Auto-size to the visible tab count (Agents/Tabs, optional Notes, optional
+     Fleet) so a fourth tab shares the row evenly instead of overflowing. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 3px;
   flex: 0 0 auto;
   padding: 4px;
@@ -3360,4 +3363,172 @@ button {
 
 .app[data-touch="true"] .terminal-stage:has(.terminal-mobile-controls) .terminal-selection-sheet {
   bottom: calc(var(--terminal-mobile-controls-height) + 8px * var(--mobile-controls-scale));
+}
+
+/* --------------------------------------------------------------- fleet usage */
+
+.fleet-pool {
+  gap: 4px;
+}
+
+.fleet-active-alias {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--subtext0);
+}
+
+.fleet-muted {
+  padding: 4px 10px 8px;
+  color: var(--overlay0);
+  font-size: 12px;
+}
+
+.fleet-account {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 8px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--mantle);
+}
+
+.fleet-account[data-active="true"] {
+  border-color: var(--surface1);
+  background: var(--row-active);
+}
+
+.fleet-account-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fleet-account-alias {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fleet-account-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--crust);
+  background: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fleet-account-status {
+  margin-left: auto;
+  color: var(--yellow);
+  font-size: 11px;
+}
+
+.fleet-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fleet-bar-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--subtext0);
+}
+
+.fleet-bar-label {
+  flex: 0 0 auto;
+  min-width: 22px;
+}
+
+.fleet-bar-pct {
+  flex: 0 0 auto;
+  color: var(--text);
+}
+
+.fleet-bar-reset {
+  margin-left: auto;
+  color: var(--overlay1);
+  font-size: 11px;
+}
+
+.fleet-bar-track {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface0);
+}
+
+.fleet-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+
+.fleet-bar-fill[data-level="warn"] {
+  background: var(--yellow);
+}
+
+.fleet-bar-fill[data-level="hot"] {
+  background: var(--red);
+}
+
+.fleet-bar-small .fleet-bar-track {
+  height: 4px;
+}
+
+.fleet-bar-small .fleet-bar-head {
+  font-size: 11px;
+  color: var(--overlay1);
+}
+
+.fleet-scoped {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 1px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.fleet-pace {
+  font-size: 11px;
+  color: var(--peach);
+}
+
+.fleet-spend {
+  font-size: 11.5px;
+  color: var(--subtext0);
+}
+
+.fleet-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 8px 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.fleet-updated {
+  flex: 1 1 auto;
+  color: var(--overlay0);
+  font-size: 11px;
+}
+
+.fleet-stale {
+  color: var(--yellow);
+}
+
+.fleet-refresh {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 12px;
 }
