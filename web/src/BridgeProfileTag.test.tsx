@@ -54,4 +54,27 @@ describe("BridgeProfileTag", () => {
     const none = await render(<BridgeProfileTag />);
     expect(none.querySelector(".bridge-profile-tag")).toBeNull();
   });
+
+  it("renders a single letter with the full word as accessible name when compact", async () => {
+    const work = await render(<BridgeProfileTag profile="work" compact />);
+    const workTag = work.querySelector<HTMLElement>(".bridge-profile-tag-compact");
+    expect(workTag?.textContent).toBe("W");
+    expect(workTag?.getAttribute("aria-label")).toBe("work");
+    expect(workTag?.getAttribute("title")).toBe("work");
+    expect(workTag?.getAttribute("data-profile")).toBe("work");
+
+    const personal = await render(<BridgeProfileTag profile="personal" compact />);
+    const personalTag = personal.querySelector<HTMLElement>(".bridge-profile-tag-compact");
+    expect(personalTag?.textContent).toBe("P");
+    expect(personalTag?.getAttribute("aria-label")).toBe("personal");
+    expect(personalTag?.getAttribute("title")).toBe("personal");
+  });
+
+  it("renders nothing for other or absent profile even when compact", async () => {
+    const other = await render(<BridgeProfileTag profile="other" compact />);
+    expect(other.querySelector(".bridge-profile-tag")).toBeNull();
+
+    const none = await render(<BridgeProfileTag compact />);
+    expect(none.querySelector(".bridge-profile-tag")).toBeNull();
+  });
 });

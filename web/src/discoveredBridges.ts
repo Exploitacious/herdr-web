@@ -145,6 +145,9 @@ export function mergeDiscoveredBridges(
       .map((backend) => [backend.id, backend] as const),
   );
   const userUrls = new Set(userBackends.map((backend) => backend.baseUrl));
+  // The page's own origin is already reachable as the same-origin bridge, so a
+  // discovered entry pointing at it (e.g. the hub itself) would be a duplicate.
+  const ownOrigin = pageOrigin();
 
   const discoveredBackends: BridgeBackendProfile[] = [];
   const newlyAddedIds: string[] = [];
@@ -153,6 +156,9 @@ export function mergeDiscoveredBridges(
 
   for (const bridge of discovered) {
     const id = `${DISCOVERED_ID_PREFIX}${bridge.id}`;
+    if (ownOrigin && bridge.baseUrl === ownOrigin) {
+      continue; // Would duplicate the same-origin bridge.
+    }
     if (userUrls.has(bridge.baseUrl)) {
       continue; // A user-saved backend for this URL takes precedence.
     }
@@ -237,6 +243,13 @@ function backendsEqual(
       left.profile === right.profile
     );
   });
+}
+
+// The page origin as a normalized origin string, or null when there is no
+// usable location (a non-browser test context, or an opaque "null" origin).
+function pageOrigin(): string | null {
+  const origin = globalThis.location?.origin;
+  return typeof origin === "string" && origin && origin !== "null" ? origin : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

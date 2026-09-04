@@ -91,5 +91,8 @@ over a discovered one. The shape is:
 ```
 
 `id`, `name`, and `baseUrl` are required per entry. `profile` (one of `work`, `personal`, `other`)
-and `color` (a `#rrggbb` hex) are optional; `profile` renders a small `work`/`personal` tag next to
-the bridge name. The `hub` entry is not added as a bridge (it is the same origin as the page).
+and `color` (a `#rrggbb` hex) are optional; `profile` renders a small tag next to the bridge name —
+a compact `W`/`P` on the narrow host chips (with the full word as its accessible name) and the full
+`work`/`personal` word in space-group headers and the Settings summary. The `hub` entry is not added
+as a bridge, and any entry whose URL is the page's own origin is dropped, since it is already
+reachable as the same-origin bridge.

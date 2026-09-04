@@ -7202,7 +7202,7 @@ function Switcher({
           >
             <span className="bridge-chip-dot" aria-hidden="true" />
             <span className="bridge-chip-label">{view.runtime.label}</span>
-            <BridgeProfileTag profile={view.runtime.backend?.profile} />
+            <BridgeProfileTag profile={view.runtime.backend?.profile} compact />
           </button>
         ))}
         {bridgeViews.length > 1 ? (

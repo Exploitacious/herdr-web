@@ -446,6 +446,13 @@ button {
   background: color-mix(in srgb, var(--mauve) 16%, transparent);
 }
 
+/* Single-letter W/P variant for the host chips, so the session name keeps its
+   room in the 320-400px sidebar. The full word stays elsewhere. */
+.bridge-profile-tag-compact {
+  padding: 0 4px;
+  letter-spacing: 0;
+}
+
 .grp-bridge-dot {
   width: 9px;
   height: 9px;

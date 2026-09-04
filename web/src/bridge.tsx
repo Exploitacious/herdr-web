@@ -145,6 +145,10 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   const [probeRetryTokens, setProbeRetryTokens] = useState<Record<string, number>>({});
   const [resumeToken, setResumeToken] = useState(0);
   const storeEditedRef = useRef(false);
+  // Guards against overlapping /bridges.json reads: focus and visibilitychange
+  // fire together when a phone returns to the foreground, and an interval tick
+  // can land mid-flight. One read at a time is enough.
+  const discoveryInFlightRef = useRef(false);
 
   const sameOriginAvailable = defaultBridgeMode() === "same-origin";
 
@@ -185,12 +189,22 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
     }
     let cancelled = false;
     const refresh = () => {
-      void fetchDiscoveredBridges().then((discovered) => {
-        if (cancelled) {
-          return;
-        }
-        setStore((current) => mergeDiscoveredBridges(current, discovered));
-      });
+      if (discoveryInFlightRef.current) {
+        return;
+      }
+      discoveryInFlightRef.current = true;
+      void fetchDiscoveredBridges()
+        .then((discovered) => {
+          if (cancelled) {
+            return;
+          }
+          setStore((current) => mergeDiscoveredBridges(current, discovered));
+        })
+        .finally(() => {
+          // Always clear, even on cleanup, so a re-run of this effect is never
+          // wedged by a read that was in flight when it tore down.
+          discoveryInFlightRef.current = false;
+        });
     };
     refresh();
     const interval = window.setInterval(refresh, DISCOVERY_REFRESH_MS);

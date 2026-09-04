@@ -190,6 +190,20 @@ describe("mergeDiscoveredBridges", () => {
     ]);
   });
 
+  it("drops a discovered bridge whose URL is the page's own origin", () => {
+    // The hub serves the page, so it may list itself; that entry duplicates the
+    // same-origin bridge and must not become a separate configured backend.
+    vi.stubGlobal("location", { origin: HUB });
+    const merged = mergeDiscoveredBridges(store(), [
+      { id: "session:hub", name: "console", baseUrl: HUB, profile: "work" },
+      { id: "session:a", name: "a", baseUrl: A, profile: "work" },
+    ]);
+
+    expect(merged.backends.map((backend) => backend.id)).toEqual([
+      `${DISCOVERED_ID_PREFIX}session:a`,
+    ]);
+  });
+
   it("returns the same store reference when nothing changed", () => {
     const current = mergeDiscoveredBridges(store(), [{ id: "session:a", name: "a", baseUrl: A, profile: "work" }]);
     const again = mergeDiscoveredBridges(current, [{ id: "session:a", name: "a", baseUrl: A, profile: "work" }]);
