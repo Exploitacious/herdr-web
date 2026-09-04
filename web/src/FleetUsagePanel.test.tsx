@@ -16,6 +16,8 @@ import { fetchFleetUsage, normalizeFleetUsage, type FleetUsage } from "./fleetUs
 
 const mockFetch = vi.mocked(fetchFleetUsage);
 const FIXED_NOW = new Date("2026-09-04T17:00:00Z");
+// Mirrors the poll cadence in FleetUsagePanel.tsx (kept in sync deliberately).
+const FLEET_USAGE_REFRESH_MS = 60_000;
 
 // Live-shaped fixture with placeholder emails (never a real address).
 function rawFixture() {
@@ -79,6 +81,20 @@ function fixtureModel(): FleetUsage {
   return usage;
 }
 
+// Drives the real hook so its fetch/poll/teardown lifecycle is exercised end to end.
+function HookHarness() {
+  const { usage, stale, refresh } = useFleetUsage();
+  return <FleetUsagePanel usage={usage} stale={stale} onRefresh={refresh} now={FIXED_NOW} />;
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 const roots: Root[] = [];
 
 beforeEach(() => {
@@ -96,6 +112,7 @@ afterEach(async () => {
   });
   document.body.innerHTML = "";
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 async function render(node: React.ReactNode) {
@@ -191,5 +208,90 @@ describe("FleetUsagePanel", () => {
     expect(container.textContent).toContain("claude1");
     expect(container.querySelector(".fleet-stale")).not.toBeNull();
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("coalesces focus and visibilitychange firing together into one fetch", async () => {
+    // Force a visible page so both handlers attempt a refresh.
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    mockFetch.mockResolvedValue(fixtureModel());
+
+    const { container } = await render(<HookHarness />);
+    await flush();
+    expect(container.textContent).toContain("claude1");
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flush();
+    // Without the in-flight guard this pair would issue two concurrent fetches.
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops fetching and does not set state after unmount", async () => {
+    vi.useFakeTimers();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const pending = deferred<FleetUsage | null>();
+    mockFetch.mockReturnValueOnce(pending.promise);
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<HookHarness />);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    // Interval and listeners are torn down: time and focus produce no fetch.
+    await act(async () => {
+      vi.advanceTimersByTime(FLEET_USAGE_REFRESH_MS * 3);
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    // The mount fetch resolving after unmount must not set state or warn.
+    await act(async () => {
+      pending.resolve(fixtureModel());
+      await Promise.resolve();
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("backs off the periodic poll while no usage has loaded", async () => {
+    vi.useFakeTimers();
+    mockFetch.mockResolvedValue(null); // no generator / 404
+
+    const { container } = await render(<HookHarness />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Mount fetch only; usage stays null so the panel renders nothing.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toBe("");
+
+    // Four 60 s ticks are skipped while nothing usable has loaded.
+    await act(async () => {
+      vi.advanceTimersByTime(FLEET_USAGE_REFRESH_MS * 4);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    // The fifth tick (~5 min) polls once more.
+    await act(async () => {
+      vi.advanceTimersByTime(FLEET_USAGE_REFRESH_MS);
+      await Promise.resolve();
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
   });
 });

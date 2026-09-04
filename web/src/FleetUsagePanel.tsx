@@ -12,9 +12,14 @@ import {
   type FleetWindow,
 } from "./fleetUsage";
 
-// Poll the fleet usage file on the same cadence the hub regenerates it (~2 min),
+// Poll the fleet usage file roughly on the cadence the hub regenerates it,
 // plus on focus/visibility so a phone waking up refreshes promptly.
 const FLEET_USAGE_REFRESH_MS = 60_000;
+
+// While no usable payload has ever loaded (e.g. no generator / 404), poll every
+// Nth tick instead so a client left on such a deployment does not hit
+// /usage.json every minute. 5 x 60s = ~5 min.
+const FLEET_USAGE_IDLE_POLL_MULTIPLE = 5;
 
 export interface FleetUsageState {
   usage: FleetUsage | null;
@@ -30,9 +35,22 @@ export function useFleetUsage(): FleetUsageState {
   const [stale, setStale] = useState(false);
   const lastGoodRef = useRef<FleetUsage | null>(null);
   const mountedRef = useRef(true);
+  // Coalesce overlapping triggers: focus and visibilitychange can fire together,
+  // and we must not start two concurrent fetches that race the stale flag.
+  const inFlightRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    const result = await fetchFleetUsage();
+    if (inFlightRef.current) {
+      return;
+    }
+    inFlightRef.current = true;
+    let result: FleetUsage | null = null;
+    try {
+      result = await fetchFleetUsage();
+    } finally {
+      inFlightRef.current = false;
+    }
+    // A fetch that resolves after unmount must not set state.
     if (!mountedRef.current) {
       return;
     }
@@ -49,7 +67,13 @@ export function useFleetUsage(): FleetUsageState {
   useEffect(() => {
     mountedRef.current = true;
     void refresh();
+    let tick = 0;
     const interval = window.setInterval(() => {
+      tick += 1;
+      if (lastGoodRef.current === null && tick % FLEET_USAGE_IDLE_POLL_MULTIPLE !== 0) {
+        // Back off the poll while nothing usable has loaded yet.
+        return;
+      }
       void refresh();
     }, FLEET_USAGE_REFRESH_MS);
     const onFocus = () => {

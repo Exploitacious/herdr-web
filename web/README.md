@@ -103,5 +103,10 @@ An account looks like:
 
 Only `version`, `pools`, `accounts`, `number`, `usage.fiveHour.pct`, and `usage.sevenDay.pct` are
 required; every other field is optional and a pool may be `null`. Percentages are clamped to
-0–100 and rendered ok (< 75), warn (75–89.99), or hot (≥ 90). Parsing and normalization live in
-`src/fleetUsage.ts`; the panel and its refresh hook live in `src/FleetUsagePanel.tsx`.
+0–100 and rendered ok (< 75), warn (75–89.99), or hot (≥ 90).
+
+The panel refreshes on mount, every 60 seconds, on window `focus`, and on `visibilitychange` when
+the page becomes visible; a failed refresh keeps the last good data and shows a stale marker. While
+nothing usable has loaded yet (no generator / 404) the periodic poll backs off to roughly five
+minutes. Parsing and normalization live in `src/fleetUsage.ts`; the panel and its refresh hook live
+in `src/FleetUsagePanel.tsx`.

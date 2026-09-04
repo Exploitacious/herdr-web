@@ -10,8 +10,9 @@
   usage of the operator's Claude Code account pools (WORK and PERSONAL): which account is active,
   each account's 5-hour and 7-day limit percentages with reset countdowns, pace and projected
   exhaustion, spend, and per-model scoped windows. The tab and feature are hidden entirely when the
-  file is absent (404) or unusable. Refreshes on mount, every 60 seconds, and on window focus;
-  a failed refresh keeps the last good data with a stale marker.
+  file is absent (404) or unusable. Refreshes on mount, every 60 seconds, on window focus, and on
+  visibilitychange when the page becomes visible; a failed refresh keeps the last good data with a
+  stale marker.
 
 ### Changed
 
