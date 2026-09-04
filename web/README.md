@@ -96,3 +96,54 @@ a compact `W`/`P` on the narrow host chips (with the full word as its accessible
 `work`/`personal` word in space-group headers and the Settings summary. The `hub` entry is not added
 as a bridge, and any entry whose URL is the page's own origin is dropped, since it is already
 reachable as the same-origin bridge.
+## Fleet usage
+
+The optional **Fleet** sidebar tab shows the usage of the operator's Claude Code account pools.
+It reads a generated JSON file served at `/usage.json` on the same origin as the page (no-cache,
+regenerated periodically). The tab is hidden entirely when the file is absent (404) or unusable, so
+deployments without a usage generator are unaffected.
+
+The file describes a WORK pool and a PERSONAL pool, each rotating across accounts on 5-hour and
+7-day usage limits:
+
+```jsonc
+{
+  "version": 1,
+  "generatedAt": "2026-09-04T16:26:37Z",
+  "pools": {
+    "work": { "activeAccountNumber": 3, "accounts": [ /* ... */ ] },
+    "personal": null
+  }
+}
+```
+
+An account looks like:
+
+```jsonc
+{
+  "number": 3,
+  "email": "…",            // shown only in the row title attribute, never as visible text
+  "alias": "claude1",       // the visible label
+  "active": true,
+  "usageStatus": "ok",
+  "usage": {
+    "fiveHour": { "pct": 61.0, "resetsAt": "…", "countdown": "4h 11m", "clock": "16:40" },
+    "sevenDay": {
+      "pct": 45.0, "resetsAt": "…", "countdown": "17h 31m", "clock": "Sep 5 06:00",
+      "expectedPct": 89.6, "aheadOfPace": false, "projectedExhaustionAt": "…", "willLastToReset": true
+    },
+    "spend": { "used": 116.74, "limit": 150.0, "pct": 77.8, "currency": "USD" },
+    "scoped": [ { "name": "Fable", "pct": 50.0, "resetsAt": "…", "countdown": "4d 19h" } ]
+  }
+}
+```
+
+Only `version`, `pools`, `accounts`, `number`, `usage.fiveHour.pct`, and `usage.sevenDay.pct` are
+required; every other field is optional and a pool may be `null`. Percentages are clamped to
+0–100 and rendered ok (< 75), warn (75–89.99), or hot (≥ 90).
+
+The panel refreshes on mount, every 60 seconds, on window `focus`, and on `visibilitychange` when
+the page becomes visible; a failed refresh keeps the last good data and shows a stale marker. While
+nothing usable has loaded yet (no generator / 404) the periodic poll backs off to roughly five
+minutes. Parsing and normalization live in `src/fleetUsage.ts`; the panel and its refresh hook live
+in `src/FleetUsagePanel.tsx`.
