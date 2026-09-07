@@ -19,7 +19,7 @@ import {
   parseCombineMatchingWorkspaceNames,
   parseCollapsedSidebarGroups,
   parseSidebarView,
-  hasStoredSidebarView,
+  parseSidebarViewChosen,
   resolveLandingView,
   isInFlightNoteSaveVisible,
   launcherEmptyMessage,
@@ -2119,18 +2119,15 @@ describe("sidebar view landing", () => {
     expect(parseSidebarView(3, "notes")).toBe("notes");
   });
 
-  it("reports whether a stored blob names a sidebar view", () => {
-    // Any recognized value is an explicit choice -- an "agents" pick counts too.
-    expect(hasStoredSidebarView({ sidebarView: "fleet" })).toBe(true);
-    expect(hasStoredSidebarView({ sidebarView: "agents" })).toBe(true);
-    expect(hasStoredSidebarView({ sidebarView: "tabs" })).toBe(true);
-    // A blob without a recognized view (first visit, or an unrelated field) is
-    // "no choice", so the Fleet landing default may apply.
-    expect(hasStoredSidebarView({})).toBe(false);
-    expect(hasStoredSidebarView({ sidebarView: "bogus" })).toBe(false);
-    expect(hasStoredSidebarView({ agentSort: "status" })).toBe(false);
-    expect(hasStoredSidebarView(null)).toBe(false);
-    expect(hasStoredSidebarView("agents")).toBe(false);
+  it("treats the explicit-choice flag as boolean-only, defaulting to not chosen", () => {
+    expect(parseSidebarViewChosen(true)).toBe(true);
+    expect(parseSidebarViewChosen(false)).toBe(false);
+    // Absent (a blob predating the flag) or non-boolean reads as not chosen, so
+    // an existing device that never chose a view still gets the Fleet landing.
+    expect(parseSidebarViewChosen(undefined)).toBe(false);
+    expect(parseSidebarViewChosen("true")).toBe(false);
+    expect(parseSidebarViewChosen(1)).toBe(false);
+    expect(parseSidebarViewChosen(undefined, true)).toBe(true);
   });
 
   it("lands on Fleet only for an unchosen view with the feed present", () => {
@@ -2143,5 +2140,20 @@ describe("sidebar view landing", () => {
     expect(resolveLandingView("notes", true, true)).toBe("notes");
     // Already on Fleet stays on Fleet (idempotent, no flip-flop).
     expect(resolveLandingView("fleet", true, false)).toBe("fleet");
+  });
+
+  it("migrates an existing device (stored agents, no chosen flag) to the Fleet landing", () => {
+    // Every device today has a stored sidebarView but no sidebarViewChosen field,
+    // which parses to not-chosen, so the feed moves it to Fleet with zero taps.
+    const viewChosen = parseSidebarViewChosen(undefined);
+    expect(viewChosen).toBe(false);
+    expect(resolveLandingView("agents", true, viewChosen)).toBe("fleet");
+  });
+
+  it("keeps a device that explicitly chose Agents on Agents", () => {
+    // A stored sidebarViewChosen: true means a real pick; the feed never overrides it.
+    const viewChosen = parseSidebarViewChosen(true);
+    expect(viewChosen).toBe(true);
+    expect(resolveLandingView("agents", true, viewChosen)).toBe("agents");
   });
 });

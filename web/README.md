@@ -103,10 +103,13 @@ It reads a generated JSON file served at `/usage.json` on the same origin as the
 regenerated periodically). The tab is hidden entirely when the file is absent (404) or unusable, so
 deployments without a usage generator are unaffected.
 
-On a device that has never chosen a sidebar view, the app lands on the Fleet tab once the feed
-loads, so the page opens on subscription status rather than the agents list; the choice is then
-remembered, and an explicit later pick of another view always wins. A device with no `/usage.json`
-lands on Agents as before, since the Fleet tab never appears.
+Until a sidebar view is explicitly chosen, the app lands on the Fleet tab once the feed loads, so
+the page opens on subscription status rather than the agents list. Whether a view was chosen is a
+persisted `sidebarViewChosen` flag, separate from the stored view because the app rewrites the view
+on every change; the flag is false on every existing device (the field is absent, which reads as
+not chosen), so those devices move to Fleet with no taps. Tapping any view sets the flag, so that
+choice is remembered on the next visit and always wins. A device with no `/usage.json` lands on
+Agents as before, since the Fleet tab never appears.
 
 The file describes a WORK pool and a PERSONAL pool, each rotating across accounts on 5-hour and
 7-day usage limits:
