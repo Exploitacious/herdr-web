@@ -208,7 +208,7 @@ const NoteMarkdownPreview = lazy(() => import("./NoteMarkdownPreview"));
 type LoadState = "loading" | "ready" | "error";
 type Scope = "space" | "all";
 type HostScope = "selected" | "all";
-type SidebarView = "agents" | "tabs" | "notes" | "fleet";
+export type SidebarView = "agents" | "tabs" | "notes" | "fleet";
 type AgentSort = "attention" | "status" | "workspace" | "lastStatusChange";
 type AgentGroup = "none" | "host" | "workspace" | "hostWorkspace";
 type SpaceGroup = "none" | "host";
@@ -615,12 +615,7 @@ function parseDisplayPrefsValue(
         ? parsed.hostScope
         : fallback.hostScope,
     scope: parsed.scope === "all" || parsed.scope === "space" ? parsed.scope : fallback.scope,
-    sidebarView:
-      parsed.sidebarView === "agents" ||
-      parsed.sidebarView === "tabs" ||
-      parsed.sidebarView === "notes"
-        ? parsed.sidebarView
-        : fallback.sidebarView,
+    sidebarView: parseSidebarView(parsed.sidebarView, fallback.sidebarView),
     agentSort:
       parsed.agentSort === "attention" ||
       parsed.agentSort === "status" ||
@@ -878,6 +873,57 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+// Single source for the recognized sidebar views, so parseSidebarView and
+// hasStoredSidebarView never drift as views are added.
+const SIDEBAR_VIEWS: readonly SidebarView[] = ["agents", "tabs", "notes", "fleet"];
+
+function isSidebarView(value: unknown): value is SidebarView {
+  return typeof value === "string" && (SIDEBAR_VIEWS as readonly string[]).includes(value);
+}
+
+// "fleet" became a valid stored choice when the Fleet landing default shipped;
+// keeping it here stops a saved "fleet" from being silently reset to "agents".
+export function parseSidebarView(value: unknown, fallback: SidebarView): SidebarView {
+  return isSidebarView(value) ? value : fallback;
+}
+
+// Reports whether stored display prefs already name a sidebar view. The Fleet
+// landing default only applies to a device that never chose one, so any
+// recognized value counts as a choice -- an explicit "agents" is a choice too.
+export function hasStoredSidebarView(parsed: unknown): boolean {
+  return isRecord(parsed) && isSidebarView(parsed.sidebarView);
+}
+
+// Decide the view to open on once fleet availability is known. A visitor who has
+// never chosen a view lands on Fleet when its feed is present; any saved or
+// in-session choice, and any deployment without the feed, keeps the current
+// view. Pure so App's landing effect stays unit-testable without rendering App.
+export function resolveLandingView(
+  current: SidebarView,
+  fleetAvailable: boolean,
+  viewChosen: boolean,
+): SidebarView {
+  if (viewChosen || !fleetAvailable) {
+    return current;
+  }
+  return "fleet";
+}
+
+// Learn whether the user ever chose a sidebar view. Read here from raw storage
+// (not the parsed prefs, which always carry a defaulted sidebarView) and during
+// render, before the persist effect writes the mount defaults, so a genuine
+// first visit reads as "no choice".
+function readStoredSidebarViewExplicit(): boolean {
+  try {
+    const raw =
+      window.localStorage.getItem(DISPLAY_PREFS_KEY) ??
+      window.localStorage.getItem(LEGACY_DISPLAY_PREFS_KEY);
+    return raw ? hasStoredSidebarView(JSON.parse(raw)) : false;
+  } catch {
+    return false;
+  }
+}
+
 function isMobileDetailHistoryState(value: unknown) {
   return isRecord(value) && value[MOBILE_DETAIL_HISTORY_KEY] === true;
 }
@@ -940,6 +986,9 @@ function usePointerDragResize(
 export function App() {
   const bridge = useBridge();
   const initialPrefs = useMemo(readDisplayPrefs, []);
+  // Captured pre-mount (before the persist effect writes defaults) so the Fleet
+  // landing default can tell a first-time device from a returning one.
+  const initialSidebarViewChosen = useMemo(readStoredSidebarViewExplicit, []);
   const initialSharedNavigationPrefs = useMemo(readSharedNavigationPrefs, []);
   const initialNavigationSyncMode = useMemo(readNavigationSyncMode, []);
   const legacySelectionPrefs = useMemo(readLegacyDisplaySelectionPrefs, []);
@@ -3808,6 +3857,7 @@ export function App() {
           capabilityState={selectedRuntime?.capabilityState ?? "idle"}
           scope={scope}
           sidebarView={sidebarView}
+          initialSidebarViewChosen={initialSidebarViewChosen}
           notesEnabled={notesEnabled}
           notesStates={notesStates}
           visibleNotes={visibleNotes}
@@ -5999,6 +6049,7 @@ function Switcher({
   capabilityState,
   scope,
   sidebarView,
+  initialSidebarViewChosen,
   notesEnabled,
   notesStates,
   visibleNotes,
@@ -6057,6 +6108,7 @@ function Switcher({
   capabilityState: "idle" | "probing" | "ready" | "error";
   scope: Scope;
   sidebarView: SidebarView;
+  initialSidebarViewChosen: boolean;
   notesEnabled: boolean;
   notesStates: Record<string, BridgeNotesState>;
   visibleNotes: ScopedNoteEntry[];
@@ -6121,6 +6173,30 @@ function Switcher({
   // null (tab hidden) until the hub's /usage.json returns a usable payload.
   const { usage: fleetUsage, stale: fleetStale, refresh: refreshFleet } = useFleetUsage();
   const fleetAvailable = fleetUsage != null;
+  // Tracks whether the user has committed to a sidebar view -- seeded from stored
+  // prefs, then flipped by the view buttons below. Guards the Fleet landing so it
+  // fires only for a device that never chose a view, never over a real choice.
+  const sidebarViewChosenRef = useRef(initialSidebarViewChosen);
+  const chooseSidebarView = useCallback(
+    (view: SidebarView) => {
+      sidebarViewChosenRef.current = true;
+      onSidebarView(view);
+    },
+    [onSidebarView],
+  );
+  // Land a first-time visitor on Fleet once its feed is available, so the page
+  // opens on subscription status instead of an empty bridge list. Keyed on the
+  // fleetAvailable transition; resolveLandingView keeps the decision testable.
+  useEffect(() => {
+    const nextView = resolveLandingView(sidebarView, fleetAvailable, sidebarViewChosenRef.current);
+    if (nextView !== sidebarView) {
+      onSidebarView(nextView);
+    }
+  }, [fleetAvailable, sidebarView, onSidebarView]);
+  // A stored "fleet" view with no feed (feed removed, or the first fetch still
+  // pending) has no Fleet button and its list body falls through to the agents
+  // list; keep the Agents toggle pressed so the header never reads all-off.
+  const agentsToggleActive = sidebarView === "agents" || (sidebarView === "fleet" && !fleetAvailable);
   const [optionsMenu, setOptionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [spaceOptionsMenu, setSpaceOptionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [spaceDragTarget, setSpaceDragTarget] = useState<string | null | undefined>(undefined);
@@ -7226,9 +7302,9 @@ function Switcher({
       <div className="sidebar-mode" role="group" aria-label="Sidebar view">
         <button
           type="button"
-          data-on={sidebarView === "agents"}
-          aria-pressed={sidebarView === "agents"}
-          onClick={() => onSidebarView("agents")}
+          data-on={agentsToggleActive}
+          aria-pressed={agentsToggleActive}
+          onClick={() => chooseSidebarView("agents")}
         >
           Agents
         </button>
@@ -7236,7 +7312,7 @@ function Switcher({
           type="button"
           data-on={sidebarView === "tabs"}
           aria-pressed={sidebarView === "tabs"}
-          onClick={() => onSidebarView("tabs")}
+          onClick={() => chooseSidebarView("tabs")}
         >
           Tabs
         </button>
@@ -7245,7 +7321,7 @@ function Switcher({
             type="button"
             data-on={sidebarView === "notes"}
             aria-pressed={sidebarView === "notes"}
-            onClick={() => onSidebarView("notes")}
+            onClick={() => chooseSidebarView("notes")}
           >
             Notes
           </button>
@@ -7255,7 +7331,7 @@ function Switcher({
             type="button"
             data-on={sidebarView === "fleet"}
             aria-pressed={sidebarView === "fleet"}
-            onClick={() => onSidebarView("fleet")}
+            onClick={() => chooseSidebarView("fleet")}
           >
             Fleet
           </button>

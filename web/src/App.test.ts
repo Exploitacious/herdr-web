@@ -18,6 +18,9 @@ import {
   noteDraftStorageKey,
   parseCombineMatchingWorkspaceNames,
   parseCollapsedSidebarGroups,
+  parseSidebarView,
+  hasStoredSidebarView,
+  resolveLandingView,
   isInFlightNoteSaveVisible,
   launcherEmptyMessage,
   menuItems,
@@ -2103,3 +2106,42 @@ function note(
         : undefined,
   };
 }
+
+describe("sidebar view landing", () => {
+  it("accepts fleet as a stored sidebar view", () => {
+    expect(parseSidebarView("fleet", "agents")).toBe("fleet");
+    expect(parseSidebarView("agents", "tabs")).toBe("agents");
+    expect(parseSidebarView("tabs", "agents")).toBe("tabs");
+    expect(parseSidebarView("notes", "agents")).toBe("notes");
+    // Unknown or missing values fall back rather than sticking a bogus view.
+    expect(parseSidebarView("bogus", "agents")).toBe("agents");
+    expect(parseSidebarView(undefined, "tabs")).toBe("tabs");
+    expect(parseSidebarView(3, "notes")).toBe("notes");
+  });
+
+  it("reports whether a stored blob names a sidebar view", () => {
+    // Any recognized value is an explicit choice -- an "agents" pick counts too.
+    expect(hasStoredSidebarView({ sidebarView: "fleet" })).toBe(true);
+    expect(hasStoredSidebarView({ sidebarView: "agents" })).toBe(true);
+    expect(hasStoredSidebarView({ sidebarView: "tabs" })).toBe(true);
+    // A blob without a recognized view (first visit, or an unrelated field) is
+    // "no choice", so the Fleet landing default may apply.
+    expect(hasStoredSidebarView({})).toBe(false);
+    expect(hasStoredSidebarView({ sidebarView: "bogus" })).toBe(false);
+    expect(hasStoredSidebarView({ agentSort: "status" })).toBe(false);
+    expect(hasStoredSidebarView(null)).toBe(false);
+    expect(hasStoredSidebarView("agents")).toBe(false);
+  });
+
+  it("lands on Fleet only for an unchosen view with the feed present", () => {
+    // First visit (no choice) with the feed available -> Fleet.
+    expect(resolveLandingView("agents", true, false)).toBe("fleet");
+    // No feed -> stays on the current view, so no-usage deployments are unaffected.
+    expect(resolveLandingView("agents", false, false)).toBe("agents");
+    // An explicit choice is never overridden, even Agents, even with the feed up.
+    expect(resolveLandingView("agents", true, true)).toBe("agents");
+    expect(resolveLandingView("notes", true, true)).toBe("notes");
+    // Already on Fleet stays on Fleet (idempotent, no flip-flop).
+    expect(resolveLandingView("fleet", true, false)).toBe("fleet");
+  });
+});

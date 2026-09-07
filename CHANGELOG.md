@@ -19,7 +19,10 @@
   visibilitychange when the page becomes visible; a failed refresh keeps the last good data with a
   stale marker. Accounts that cannot report usage (for example `relogin_required`, `usage: null`)
   are still rendered with their status and a "no usage data" line instead of being dropped, so the
-  operator sees what needs action.
+  operator sees what needs action. On a device that has never chosen a sidebar view, the page now
+  lands on the Fleet tab once its feed is available (so it opens on subscription status, not the
+  agents list); the choice is remembered and an explicit later view pick always wins, and
+  deployments without `/usage.json` still land on Agents since the tab never appears.
 - Added `--public-origin ORIGIN` for trusted reverse proxies that publish the bridge from a different
   scheme or port.
 
