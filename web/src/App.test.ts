@@ -21,6 +21,7 @@ import {
   parseSidebarView,
   parseSidebarViewChosen,
   resolveLandingView,
+  agentsTogglePressed,
   isInFlightNoteSaveVisible,
   launcherEmptyMessage,
   menuItems,
@@ -2108,6 +2109,13 @@ function note(
 }
 
 describe("sidebar view landing", () => {
+  it("keeps the Agents toggle pressed for a stored Fleet view while the feed is absent", () => {
+    expect(agentsTogglePressed("fleet", false)).toBe(true);
+    expect(agentsTogglePressed("fleet", true)).toBe(false);
+    expect(agentsTogglePressed("agents", true)).toBe(true);
+    expect(agentsTogglePressed("notes", false)).toBe(false);
+  });
+
   it("accepts fleet as a stored sidebar view", () => {
     expect(parseSidebarView("fleet", "agents")).toBe("fleet");
     expect(parseSidebarView("agents", "tabs")).toBe("agents");

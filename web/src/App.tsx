@@ -917,6 +917,13 @@ export function resolveLandingView(
   return "fleet";
 }
 
+// The Agents toggle stays pressed for a device whose stored view is Fleet while the usage feed is
+// absent: the body already falls through to the agents list in that case, and the Fleet button is
+// not rendered, so without this the header would show no pressed view at all.
+export function agentsTogglePressed(view: SidebarView, fleetAvailable: boolean): boolean {
+  return view === "agents" || (view === "fleet" && !fleetAvailable);
+}
+
 function isMobileDetailHistoryState(value: unknown) {
   return isRecord(value) && value[MOBILE_DETAIL_HISTORY_KEY] === true;
 }
@@ -6206,7 +6213,7 @@ function Switcher({
   // A stored "fleet" view with no feed (feed removed, or the first fetch still
   // pending) has no Fleet button and its list body falls through to the agents
   // list; keep the Agents toggle pressed so the header never reads all-off.
-  const agentsToggleActive = sidebarView === "agents" || (sidebarView === "fleet" && !fleetAvailable);
+  const agentsToggleActive = agentsTogglePressed(sidebarView, fleetAvailable);
   const [optionsMenu, setOptionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [spaceOptionsMenu, setSpaceOptionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [spaceDragTarget, setSpaceDragTarget] = useState<string | null | undefined>(undefined);
