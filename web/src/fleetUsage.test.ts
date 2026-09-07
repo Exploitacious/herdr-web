@@ -91,15 +91,15 @@ describe("normalizeFleetUsage", () => {
     const active = activeAccount(usage!.pools.work);
     expect(active?.number).toBe(3);
     expect(active?.alias).toBe("claude1");
-    expect(active?.usage.fiveHour.pct).toBe(61);
+    expect(active?.usage?.fiveHour.pct).toBe(61);
 
     const first = usage!.pools.work!.accounts[0];
-    expect(first.usage.sevenDay.countdown).toBe("4d 19h");
-    expect(first.usage.sevenDay.aheadOfPace).toBe(true);
-    expect(first.usage.sevenDay.projectedExhaustionAtDate).toBeInstanceOf(Date);
-    expect(first.usage.spend?.used).toBe(116.74);
-    expect(first.usage.scoped).toHaveLength(1);
-    expect(first.usage.scoped[0].name).toBe("Fable");
+    expect(first.usage?.sevenDay.countdown).toBe("4d 19h");
+    expect(first.usage?.sevenDay.aheadOfPace).toBe(true);
+    expect(first.usage?.sevenDay.projectedExhaustionAtDate).toBeInstanceOf(Date);
+    expect(first.usage?.spend?.used).toBe(116.74);
+    expect(first.usage?.scoped).toHaveLength(1);
+    expect(first.usage?.scoped[0].name).toBe("Fable");
   });
 
   it("falls back to a number label when alias is absent (never the email)", () => {
@@ -129,7 +129,7 @@ describe("normalizeFleetUsage", () => {
     expect(normalizeFleetUsage(payload)).toBeNull();
   });
 
-  it("drops malformed accounts and clamps percentages to 0..100", () => {
+  it("drops number-less accounts, keeps usage-less ones, and clamps percentages", () => {
     const payload = {
       version: 1,
       generatedAt: "2026-09-04T16:28:40Z",
@@ -149,11 +149,81 @@ describe("normalizeFleetUsage", () => {
       },
     };
     const usage = normalizeFleetUsage(payload);
+    // The non-numeric-number account is still dropped, but the account missing
+    // sevenDay is now KEPT with usage === null (previously dropped) so a sub that
+    // cannot report is not hidden; #6 keeps its clamped percentages.
+    expect(usage?.pools.work?.accounts).toHaveLength(2);
+    const missingWindow = usage!.pools.work!.accounts[0];
+    expect(missingWindow.number).toBe(5);
+    expect(missingWindow.usage).toBeNull();
+    const clamped = usage!.pools.work!.accounts[1];
+    expect(clamped.number).toBe(6);
+    expect(clamped.usage?.fiveHour.pct).toBe(100);
+    expect(clamped.usage?.sevenDay.pct).toBe(0);
+  });
+
+  it("keeps an account with usage: null and a relogin_required status", () => {
+    const payload = {
+      version: 1,
+      generatedAt: "2026-09-04T16:28:40Z",
+      pools: {
+        work: {
+          activeAccountNumber: 2,
+          accounts: [
+            {
+              number: 2,
+              email: "work2@example.test",
+              alias: "claude2",
+              active: true,
+              usageStatus: "ok",
+              usage: { fiveHour: { pct: 43 }, sevenDay: { pct: 33 } },
+            },
+            {
+              number: 3,
+              email: "work3@example.test",
+              alias: "claude1",
+              active: false,
+              usageStatus: "relogin_required",
+              usage: null,
+            },
+          ],
+        },
+        personal: null,
+      },
+    };
+    const usage = normalizeFleetUsage(payload);
+    expect(usage?.pools.work?.accounts).toHaveLength(2);
+    const relogin = usage!.pools.work!.accounts[1];
+    expect(relogin.number).toBe(3);
+    expect(relogin.usageStatus).toBe("relogin_required");
+    expect(relogin.usage).toBeNull();
+    // The alias stays the label; the email is retained for the title only.
+    expect(relogin.alias).toBe("claude1");
+  });
+
+  it("keeps an account whose usage object is missing sevenDay (usage: null)", () => {
+    const payload = {
+      version: 1,
+      generatedAt: "2026-09-04T16:28:40Z",
+      pools: {
+        work: {
+          accounts: [
+            {
+              number: 4,
+              alias: "partial",
+              usageStatus: "relogin_required",
+              usage: { fiveHour: { pct: 12 } },
+            },
+          ],
+        },
+        personal: null,
+      },
+    };
+    const usage = normalizeFleetUsage(payload);
     expect(usage?.pools.work?.accounts).toHaveLength(1);
-    const survivor = usage!.pools.work!.accounts[0];
-    expect(survivor.number).toBe(6);
-    expect(survivor.usage.fiveHour.pct).toBe(100);
-    expect(survivor.usage.sevenDay.pct).toBe(0);
+    const partial = usage!.pools.work!.accounts[0];
+    expect(partial.number).toBe(4);
+    expect(partial.usage).toBeNull();
   });
 });
 

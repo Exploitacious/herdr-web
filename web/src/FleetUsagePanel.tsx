@@ -7,6 +7,7 @@ import {
   formatUpdated,
   usageLevel,
   type FleetAccount,
+  type FleetAccountUsage,
   type FleetPool,
   type FleetUsage,
   type FleetWindow,
@@ -149,7 +150,6 @@ function FleetPoolSection({ label, pool, now }: { label: string; pool: FleetPool
 
 function FleetAccountRow({ account, now }: { account: FleetAccount; now: Date }) {
   const { usage } = account;
-  const { spend } = usage;
   return (
     <div
       className="fleet-account"
@@ -164,6 +164,21 @@ function FleetAccountRow({ account, now }: { account: FleetAccount; now: Date })
           <span className="fleet-account-status">{account.usageStatus}</span>
         ) : null}
       </div>
+      {usage ? (
+        <FleetAccountUsageBody usage={usage} now={now} />
+      ) : (
+        // Usage is unreportable (e.g. relogin_required): keep the row so the sub
+        // needing action stays visible, with only the status badge above.
+        <div className="fleet-muted">no usage data</div>
+      )}
+    </div>
+  );
+}
+
+function FleetAccountUsageBody({ usage, now }: { usage: FleetAccountUsage; now: Date }) {
+  const { spend } = usage;
+  return (
+    <>
       <FleetBar label="5h" window={usage.fiveHour} now={now} />
       <FleetBar label="7d" window={usage.sevenDay} now={now} />
       {usage.sevenDay.aheadOfPace ? <FleetPace window={usage.sevenDay} /> : null}
@@ -179,7 +194,7 @@ function FleetAccountRow({ account, now }: { account: FleetAccount; now: Date })
           ))}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 

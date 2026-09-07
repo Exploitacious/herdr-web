@@ -165,6 +165,67 @@ describe("FleetUsagePanel", () => {
     expect(container.textContent).toContain("ahead of pace");
   });
 
+  it("renders a row for an account with no usage data instead of dropping it", async () => {
+    const raw = {
+      version: 1,
+      generatedAt: "2026-09-04T16:28:40Z",
+      pools: {
+        work: {
+          activeAccountNumber: 2,
+          accounts: [
+            {
+              number: 2,
+              email: "work2@example.test",
+              alias: "claude2",
+              active: true,
+              usageStatus: "ok",
+              usage: { fiveHour: { pct: 43 }, sevenDay: { pct: 33 } },
+            },
+            {
+              number: 3,
+              email: "work3@example.test",
+              alias: "claude1",
+              active: false,
+              usageStatus: "relogin_required",
+              usage: null,
+            },
+          ],
+        },
+        personal: null,
+      },
+    };
+    const model = normalizeFleetUsage(raw);
+    if (!model) {
+      throw new Error("fixture failed to normalize");
+    }
+    const { container } = await render(
+      <FleetUsagePanel usage={model} stale={false} onRefresh={vi.fn()} now={FIXED_NOW} />,
+    );
+
+    // Both accounts render as rows; the usage-less one is not dropped.
+    const rows = container.querySelectorAll<HTMLElement>(".fleet-account");
+    expect(rows).toHaveLength(2);
+
+    const reloginRow = Array.from(rows).find((row) => row.textContent?.includes("claude1"));
+    if (!reloginRow) {
+      throw new Error("missing usage-less account row");
+    }
+    // Status text is shown; a muted line replaces the bars, and no bar renders.
+    expect(reloginRow.querySelector(".fleet-account-status")?.textContent).toBe("relogin_required");
+    expect(reloginRow.querySelector(".fleet-muted")?.textContent).toBe("no usage data");
+    expect(reloginRow.querySelector(".fleet-bar")).toBeNull();
+    // The email stays on the title attribute, never rendered as visible text.
+    expect(reloginRow.getAttribute("title")).toBe("work3@example.test");
+    expect(reloginRow.textContent).not.toContain("@example.test");
+
+    // The account with data still renders its bars.
+    const dataRow = Array.from(rows).find((row) => row.textContent?.includes("claude2"));
+    if (!dataRow) {
+      throw new Error("missing data account row");
+    }
+    expect(dataRow.querySelector(".fleet-bar")).not.toBeNull();
+  });
+
   it("renders nothing when usage is null", async () => {
     const { container } = await render(
       <FleetUsagePanel usage={null} stale={false} onRefresh={vi.fn()} />,

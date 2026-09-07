@@ -57,7 +57,10 @@ export interface FleetAccount {
   alias: string;
   active: boolean;
   usageStatus: string | null;
-  usage: FleetAccountUsage;
+  // null when the account cannot report usage (e.g. usageStatus
+  // "relogin_required"). The account is still surfaced so the operator can see
+  // the sub that needs attention; only the bars/spend/scoped are hidden.
+  usage: FleetAccountUsage | null;
   usageAgeSeconds: number | null;
 }
 
@@ -168,6 +171,32 @@ function normalizeSpend(raw: unknown): FleetSpend | null {
   };
 }
 
+// The usage block, or null when it is absent/unreportable. fiveHour.pct and
+// sevenDay.pct are the only required fields; an account missing either has no
+// usable usage block. The account itself is kept (see normalizeAccount) so a
+// sub that cannot report (e.g. relogin_required, usage: null) is not hidden.
+function normalizeUsage(raw: unknown): FleetAccountUsage | null {
+  const record = asRecord(raw);
+  if (!record) {
+    return null;
+  }
+  const fiveHour = normalizeWindow(record.fiveHour);
+  const sevenDay = normalizeWindow(record.sevenDay);
+  if (!fiveHour || !sevenDay) {
+    return null;
+  }
+  const scopedRaw = Array.isArray(record.scoped) ? record.scoped : [];
+  const scoped = scopedRaw
+    .map(normalizeScoped)
+    .filter((entry): entry is FleetScopedWindow => entry !== null);
+  return {
+    fiveHour,
+    sevenDay,
+    spend: normalizeSpend(record.spend),
+    scoped,
+  };
+}
+
 function normalizeAccount(raw: unknown): FleetAccount | null {
   const record = asRecord(raw);
   if (!record) {
@@ -177,21 +206,6 @@ function normalizeAccount(raw: unknown): FleetAccount | null {
   if (number === null) {
     return null;
   }
-  const usageRecord = asRecord(record.usage);
-  if (!usageRecord) {
-    return null;
-  }
-  // fiveHour.pct and sevenDay.pct are the only required usage fields; an account
-  // missing either is malformed and dropped.
-  const fiveHour = normalizeWindow(usageRecord.fiveHour);
-  const sevenDay = normalizeWindow(usageRecord.sevenDay);
-  if (!fiveHour || !sevenDay) {
-    return null;
-  }
-  const scopedRaw = Array.isArray(usageRecord.scoped) ? usageRecord.scoped : [];
-  const scoped = scopedRaw
-    .map(normalizeScoped)
-    .filter((entry): entry is FleetScopedWindow => entry !== null);
   return {
     number,
     email: asString(record.email),
@@ -200,12 +214,7 @@ function normalizeAccount(raw: unknown): FleetAccount | null {
     alias: asString(record.alias) ?? `#${number}`,
     active: asBoolean(record.active) ?? false,
     usageStatus: asString(record.usageStatus),
-    usage: {
-      fiveHour,
-      sevenDay,
-      spend: normalizeSpend(usageRecord.spend),
-      scoped,
-    },
+    usage: normalizeUsage(record.usage),
     usageAgeSeconds: asFiniteNumber(record.usageAgeSeconds),
   };
 }
@@ -312,7 +321,8 @@ export function activeAccount(pool: FleetPool | null): FleetAccount | null {
 // Compact header line data: the active account's alias and 5h/7d percentages.
 export function poolSummary(pool: FleetPool | null): FleetPoolSummary | null {
   const account = activeAccount(pool);
-  if (!account) {
+  // No percentages to summarize when the active account cannot report usage.
+  if (!account || !account.usage) {
     return null;
   }
   return {
