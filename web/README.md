@@ -138,8 +138,12 @@ An account looks like:
 }
 ```
 
-Only `version`, `pools`, `accounts`, `number`, `usage.fiveHour.pct`, and `usage.sevenDay.pct` are
-required; every other field is optional and a pool may be `null`. Percentages are clamped to
+Only `version`, `pools`, `accounts`, and `number` are required to surface an account; `usage` (and
+within it `fiveHour.pct` / `sevenDay.pct`) is optional, every other field is optional, and a pool may
+be `null`. An account whose usage block is absent or incomplete is still shown (its `usage`
+normalizes to `null`, the `relogin_required` case) with a "no usage data" line instead of bars, so an
+account that needs the operator's attention is never filtered out upstream or in the page.
+Percentages are clamped to
 0–100 and rendered ok (< 75), warn (75–89.99), or hot (≥ 90).
 
 The panel refreshes on mount, every 60 seconds, on window `focus`, and on `visibilitychange` when
